@@ -123,11 +123,16 @@ run_chef () {
   chef-client -S http://$ADMIN_IP:4000/ -N $1
 }
 
+run_puppet () {
+  puppet agent --test --server $ADMIN_IP --certname $1
+}
+
 case $STATE in
     discovery)  
         echo "Discovering with: $HOSTNAME_MAC"
         post_state $HOSTNAME_MAC discovering
         run_chef $HOSTNAME_MAC
+        run_puppet $HOSTNAME_MAC
         post_state $HOSTNAME_MAC discovered
 
         while [ "$NODE_STATE" != "true" ] ; do
@@ -140,6 +145,7 @@ case $STATE in
         post_state $HOSTNAME hardware-installing
         nuke_everything
         run_chef $HOSTNAME
+        run_puppet $HOSTNAME_MAC
         if [ -a /var/log/chef/hw-problem.log ]; then
           post_state $HOSTNAME problem
         else          
@@ -158,6 +164,7 @@ case $STATE in
         nuke_everything
         echo "Hardware installing with: $HOSTNAME"
         run_chef $HOSTNAME
+        run_puppet $HOSTNAME_MAC
         if [ -a /var/log/chef/hw-problem.log ]; then
             post_state $HOSTNAME problem
         else          
@@ -169,6 +176,7 @@ case $STATE in
     update)  
         post_state $HOSTNAME hardware-updating
         run_chef $HOSTNAME
+        run_puppet $HOSTNAME_MAC
         if [ -a /var/log/chef/hw-problem.log ]; then
             post_state $HOSTNAME problem
         else          

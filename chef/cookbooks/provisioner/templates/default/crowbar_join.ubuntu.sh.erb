@@ -113,7 +113,7 @@ if [[ ! -x /etc/init.d/bluepill ]]; then
     done
     log_to apt /usr/bin/debconf-set-selections /tmp/debsel.conf
     while ! log_to apt /usr/bin/apt-get --force-yes -y install \
-        chef libxml2-dev zlib1g-dev tcpdump; do
+        chef puppet libxml2-dev zlib1g-dev tcpdump; do
         echo "Failed to apt-get install, wait and try again"
         sleep 1
     done
@@ -123,6 +123,12 @@ if [[ ! -x /etc/init.d/bluepill ]]; then
     log_to chef killall chef-client
     log_to chef update-rc.d chef-client disable
     log_to chef chmod ugo-x /etc/init.d/chef-client
+
+    # Disable the puppet service and make it not executable.
+    log_to puppet service puppet stop
+    log_to puppet killall puppet
+    log_to puppet update-rc.d puppet disable
+    log_to puppet chmod ugo-x /etc/init.d/puppet
 
     mkdir -p /opt/dell/
     (   cd /opt/dell
@@ -188,6 +194,7 @@ log_to ifup ifup -a
 # Only transition to problem state if the second run fails.
 echo "Running Chef Client (pass 2)"
 if ! log_to chef chef-client ; then
+    log_to puppet puppet agent --test
     log_to ifup ifup -a
     post_state $HOSTNAME "recovering"
     echo "Error Path"
@@ -199,6 +206,7 @@ if ! log_to chef chef-client ; then
     log_to apt /usr/bin/apt-get -q --force-yes -y install
     echo "Running Chef Client (pass 3) - apt/cache cleanup"
     if ! log_to chef chef-client ; then
+        log_to puppet puppet agent --test
         log_to ifup ifup -a
         echo "Error Path"
         echo "Syncing Time (pass 4)"
@@ -212,6 +220,7 @@ if ! log_to chef chef-client ; then
         post_state $HOSTNAME "hardware-updated"
         echo "Running Chef Client (pass 4) - password cleanup"
         if ! log_to chef chef-client ; then
+            log_to puppet puppet agent --test
             log_to ifup ifup -a
             echo "chef-client run failed four times, giving up."
             echo "Failed"
@@ -220,6 +229,7 @@ if ! log_to chef chef-client ; then
         fi
     fi
 fi
+log_to puppet puppet agent --test
 
 # Make sure our code is up to date
 log_to apt apt-get -q --force-yes -y upgrade
