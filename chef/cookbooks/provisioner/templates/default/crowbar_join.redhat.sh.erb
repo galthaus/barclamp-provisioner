@@ -121,7 +121,7 @@ if [[ ! -x /etc/init.d/bluepill ]]; then
     # Install Chef
     echo "Installing Chef..."
 
-    while ! log_to yum yum -q -y install rubygem-chef patch libxml2-devel zlib-devel ; do
+    while ! log_to yum yum -q -y install rubygem-chef puppet patch libxml2-devel zlib-devel ; do
         echo "Failed to do yum install, wait and try again"
         sleep 1
     done
@@ -129,6 +129,11 @@ if [[ ! -x /etc/init.d/bluepill ]]; then
     log_to chef killall chef-client
     log_to chef chkconfig chef-client off
     chmod 644 /etc/init.d/chef-client
+
+    log_to chef service puppet stop
+    log_to chef killall puppet
+    log_to chef chkconfig puppet off
+    chmod 644 /etc/init.d/puppet
 
     # Install Chef patches Crowbar needs.
     mkdir -p /opt/dell/
@@ -187,6 +192,7 @@ sync_time
 # We will try to pick up and run with it.
 echo "Running Chef Client  (pass 1)"
 log_to chef chef-client -l debug
+log_to puppet puppet agent --debug --test
 
 # Make sure our interfaces are as up as we can get them
 echo "Ensuring that our network interfaces are up."
@@ -195,6 +201,7 @@ log_to ifup /sbin/service network restart
 # Only transition to problem state if the second run fails.
 echo "Running Chef Client (pass 2)"
 if ! log_to chef chef-client -l debug; then
+    log_to puppet puppet agent --debug --test
     log_to ifup /sbin/service network restart
     post_state $HOSTNAME "recovering"
     echo "Error Path"
@@ -204,6 +211,7 @@ if ! log_to chef chef-client -l debug; then
     rm -rf /var/cache/chef/*
     echo "Running Chef Client (pass 3) - cache cleanup"
     if ! log_to chef chef-client -l debug; then
+        log_to puppet puppet agent --debug --test
         log_to ifup /sbin/service network restart
         echo "Error Path"
         echo "Syncing Time (pass 4)"
@@ -215,6 +223,7 @@ if ! log_to chef chef-client -l debug; then
         post_state $HOSTNAME "hardware-updated"
         echo "Running Chef Client (pass 4) - password cleanup"
         if ! log_to chef chef-client -l debug; then
+            log_to puppet puppet agent --debug --test
             log_to ifup /sbin/service network restart
             echo "chef-client run failed four times, giving up."
             echo "Failed"
@@ -223,6 +232,7 @@ if ! log_to chef chef-client -l debug; then
         fi
     fi
 fi
+log_to puppet puppet agent --debug --test
 
 # Transition to our final state
 post_state $HOSTNAME "$final_state"
